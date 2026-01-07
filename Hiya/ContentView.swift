@@ -6,76 +6,71 @@
 //
 
 import SwiftUI
-import FoundationModels
 
 struct ContentView: View {
-    private var largeLanguageModel = SystemLanguageModel.default
-    private var session = LanguageModelSession()
-
-    @State private var response = ""
-    @State private var isLoading: Bool = false
+    
+    @StateObject private var viewModel = ContentViewModel()
     
     var body: some View {
-        VStack {
+        VStack(spacing: 24) {
             Spacer()
             
-            switch largeLanguageModel.availability {
-            case .available:
-                if response.isEmpty {
-                    if isLoading {
-                        ProgressView()
-                    } else {
-                        Text("Tap the button below to get a fun response")
-                            .multilineTextAlignment(.center)
-                            .font(.title)
-                            .foregroundStyle(.tertiary)
-                    }
-                } else {
-                    Text(response)
-                        .multilineTextAlignment(.center)
-                        .font(.largeTitle)
-                        .bold()
-                }
-            case .unavailable(.deviceNotEligible):
-                Text("Your device is not eligible for Apple Intelligence.")
-            case .unavailable(.appleIntelligenceNotEnabled):
-                Text("Please enable Apple Intelligence in Settings.")
-            case .unavailable(.modelNotReady):
-                Text("AI model is not ready.")
-            case .unavailable:
-                Text("Unavailable")
-            }
+            content
             
             Spacer()
             
-            Button {
-                Task {
-                    isLoading = true
-                    
-                    defer {
-                        isLoading = false
-                    }
-                    
-                    let prompt = "Say hi in a fun way."
-                    
-                    do {
-                        let reply = try await session.respond(to: prompt)
-                        response = reply.content
-                    } catch {
-                        response = "Failed to get response: \(error.localizedDescription)"
-                    }
-                }
-            } label: {
-                Text("Welcome")
-                    .font(.largeTitle)
-                    .padding()
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonSizing(.flexible)
-            .glassEffect(.regular.interactive())
+            actionButton
         }
         .padding()
         .tint(.purple)
+    }
+    
+    // MARK: - Main Content
+    @ViewBuilder
+    private var content: some View {
+        if let message = viewModel.availabilityMessage {
+            Text(message)
+                .font(.title3)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+        } else if viewModel.isLoading {
+            ProgressView("Thinking…")
+                .font(.title2)
+        } else if let error = viewModel.errorMessage {
+            Text("⚠️ \(error)")
+                .foregroundStyle(.red)
+                .multilineTextAlignment(.center)
+        } else if viewModel.response.isEmpty {
+            Text("Tap the button below to get a fun response ✨")
+                .font(.title)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.tertiary)
+        } else {
+            Text(viewModel.response)
+                .font(.largeTitle)
+                .bold()
+                .multilineTextAlignment(.center)
+                .transition(.opacity.combined(with: .scale))
+        }
+    }
+    
+    // MARK: - Button
+    private var actionButton: some View {
+        Button {
+            Task {
+                await viewModel.generateResponse()
+            }
+        } label: {
+            Text("Welcome")
+                .font(.largeTitle)
+                .frame(maxWidth: .infinity)
+                .padding()
+        }
+        .buttonStyle(.borderedProminent)
+        .buttonSizing(.flexible)
+        .glassEffect(.regular.interactive())
+        .disabled(viewModel.isLoading || !viewModel.isAvailable)
+        .opacity(viewModel.isLoading ? 0.6 : 1)
     }
 }
 
